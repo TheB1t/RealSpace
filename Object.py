@@ -1,65 +1,73 @@
 import pygame
 import timeit
+import random
+import json
+import math
 from Point import Point
 from Camera import Camera
 
+def randomXY(gmap, w, h):
+	return (random.randint(w, (gmap.w * gmap.chunk.x) - w) / gmap.chunk.x, random.randint(h, (gmap.h * gmap.chunk.y) - h) / gmap.chunk.y)
 #### Класс объекта
 class Object():
 
-	def __init__(self, sprite, x, y, mass, game_map):
-		self.type    = 'Object'			# Тип объекта
-		self.sprite  = sprite			# Спрайт
-		self.mass    = mass				# Масса
-		self.glob    = Point(x, y)		# Координаты  в пространстве
-		self.local   = Point()
-		self.vector  = Point()			# Вектор движения
+	def __init__(self, spritefile, mass, game_map, x = None, y = None):
+		self.type    = 'Object'									# Тип объекта
+		self.spritefile = spritefile
+		self.sprite  = pygame.image.load(spritefile)			# Спрайт
+		self.mass    = mass										# Масса
+		self.angle   = 0
+		self.angle_speed = 0 # Момент вращения, град/тик
 		self.game_map = game_map
-		self.chunk   = Point(self.game_map.chunk_w, self.game_map.chunk_h)
+		if (x == None or y == None):
+			x, y = randomXY(self.game_map, self.sprite.get_width(), self.sprite.get_height())
+		self.glob    = Point(x, y)								# Глобальные координаты (Чанк)
+		self.local   = Point()									# Локальные координаты (В чанке)
+		self.vector  = Point()									# Вектор движения
+		self.deltatime = 1 / 60									# Тик
+
 	### Запускает движение по вектору
 	def move(self, x, y):
-		#new_x = Point(1, 0).rotate(self.sprite.angle)
-		#new_y = Point(0, 1).rotate(self.sprite.angle)
-		#self.vector = (new_x * x) + (new_y * y)
-		self.vector += Point(x, y) / self.chunk
+		# Новый вектор = Старый вектор + (((Вектор движения / Размер чанка) / Масса) * Дельта времени).rotate(Угол)
+		self.vector += (((Point(x, y) / self.game_map.chunk) / self.mass) * self.deltatime).rotate(self.angle)
 
+	### Устанавливает угол поворота
 	def rotate(self, angle):
-		self.sprite.angle += angle
+		a = (math.pi * angle) / 180
+		self.angle_speed += (a * self.deltatime)
 
 	### Тут вычисляется все (Физика, Изменение обьектов, и прочее)
 	def update(self, w, h):
+		self.local = (self.glob - self.glob.trunc()) * self.game_map.chunk
 		##################### ФИЗИКА #####################
 		## Коллизия со стенами карты, кривая но пойдет
 		# Если стенка по X
-		if (self.glob.x <= (self.sprite.get_width() / self.game_map.chunk_w) and self.vector.x < 0.00):
+		if (self.glob.x <= (self.sprite.get_width() / self.game_map.chunk.x) and self.vector.x < 0.00):
 			#self.vector.x = 0
 			print('X jump')
 			self.vector.x *= -1
-		elif (self.glob.x >= self.game_map.w - (self.sprite.get_width() / self.game_map.chunk_w) and self.vector.x > 0.00):
+		elif (self.glob.x >= self.game_map.w - (self.sprite.get_width() / self.game_map.chunk.x) and self.vector.x > 0.00):
 			#self.vector.x = 0
 			print('X jump')
 			self.vector.x *= -1
 
 		# Если стенка по Y
-		if (self.glob.y <= (self.sprite.get_height() / self.game_map.chunk_h) and self.vector.y < 0.00):
+		if (self.glob.y <= (self.sprite.get_height() / self.game_map.chunk.y) and self.vector.y < 0.00):
 			#self.vector.y = 0
 			print('Y jump')
 			self.vector.y *= -1
-		elif (self.glob.y >= self.game_map.h - (self.sprite.get_height() / self.game_map.chunk_h) and self.vector.y > 0.00):
+		elif (self.glob.y >= self.game_map.h - (self.sprite.get_height() / self.game_map.chunk.y) and self.vector.y > 0.00):
 			#self.vector.y = 0
 			print('Y jump')
 			self.vector.y *= -1 
-		
-		## Инерция
-		# TODO тут все криво, оставляю это тебе
-		# self.vector это вектор прибавляющийся к координатам каждую итерацию
-		# с помощью self.inert я хотел сделать угасание вектора но я ж кривожопый
-		'''
-		if (self.moving == 0):
-			if (self.vector - self.inert != 0):
-				self.vector -= self.inert
-			elif (self.vector != 0):
-				self.vector = Point()
-		else:'''
+
+		newangle = self.angle + (self.angle_speed / self.mass)
+		if (newangle < -360):
+			self.angle = 360 + newangle
+		elif (newangle > 360):
+			self.angle = 360 - newangle
+		else:
+			self.angle = newangle
 
 		## Вычисляю новые координаты
 		self.glob += self.vector
@@ -69,41 +77,46 @@ class Object():
 	def draw(self, coord, game):
 		##################### ОТРИСОВКА #####################
 		## Отрисовка спрайта
-		sprite_rect = self.sprite.get_rect()
-		game.screen.blit(self.sprite, (coord.x - (self.sprite.get_width() / 2), coord.y - (self.sprite.get_height() / 2)), sprite_rect)
-		#vector = self.vector * Point(self.game_map.chunk_w, self.game_map.chunk_h)
+		new_sprite = pygame.transform.rotate(self.sprite, self.angle)
+		sprite_rect = new_sprite.get_rect(center=(coord.x, coord.y))
+		game.screen.blit(new_sprite, sprite_rect)
+		vector = self.vector * self.game_map.chunk
 		## Отрисовка вектора в виде линии
-		#arcade.draw_line(coord.x, coord.y, coord.x + (vector.x * 5), coord.y + (vector.y * 5), arcade.color.WHITE, 1)
+		pygame.draw.line(game.screen, (255, 255, 255), [coord.x, coord.y], [coord.x + (vector.x * 25), coord.y + (vector.y * 25)], 1)
 
 
 	### Скорость
 	def speed(self):
 		return self.vector.lenght()
 
+	### Действия при нажатой кнопке
 	def on_key_hold(self, key):
 		if key == pygame.K_w:
-			self.move(0, -0.1)
+			self.move(0, -5)
 
 		if key == pygame.K_s:
-			self.move(0, 0.1)
+			self.move(0, 5)
 
 		if key == pygame.K_a:
-			self.move(-0.1, 0)
+			self.move(-5, 0)
 
 		if key == pygame.K_d:
-			self.move(0.1, 0)
+			self.move(5, 0)
 
 		if key == pygame.K_q:
-			self.rotate(1)
+			self.rotate(100)
 
 		if key == pygame.K_e:
-			self.rotate(-1)
+			self.rotate(-100)
+
+	def __str__(self):
+		data = [self.spritefile, self.mass, self.angle, [self.glob.x, self.glob.y], [self.vector.x, self.vector.y], self.type]
+		return json.dumps(data)
 
 #### Класс игрока
 class Player(Object):
-
-	def __init__(self, sprite, mass, x, y, nickname, game_map):
-		super().__init__(sprite, x, y, mass, game_map)
+	def __init__(self, spritefile, mass, nickname, game_map, x = None, y = None):
+		super().__init__(spritefile, mass, game_map, x, y)
 		self.type     = 'Player'
 		self.nickname = nickname
 		self.camera   = Camera(game_map)
@@ -111,3 +124,8 @@ class Player(Object):
 	def update(self, w, h):
 		super().update(w, h)
 		self.camera.setCamera(self.glob.x, self.glob.y)
+
+	def __str__(self):
+		data = json.loads(super().__str__())
+		data.append(self.nickname)
+		return json.dumps(data)

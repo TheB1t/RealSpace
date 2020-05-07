@@ -1,8 +1,10 @@
-import random
 import pygame
 import timeit
 import time
+import math
 from Object import Player
+from Point import Point
+from threading import Thread, currentThread
 
 #### Карта
 class Map:
@@ -11,24 +13,26 @@ class Map:
 		self.game = game
 		self.w = w
 		self.h = h
-		self.chunk_w = chunk_w
-		self.chunk_h = chunk_h
+		self.chunk = Point(chunk_w, chunk_h)
 		self.objects = []
 		self.this_player = None
 		self.itertime = 0
+
+	def addObject(self, obj):
+		self.objects.append(obj)
+		return len(self.objects) - 1
 	### Спавн игрока
 	def spawnPlayer(self, sprite, nickname, mass, x = None, y = None):
 		## Создание спрайта
-		player_sprite = pygame.image.load(sprite)
-		player_sprite_width = player_sprite.get_width()
-		player_sprite_height = player_sprite.get_height()
+		#player_sprite = pygame.transform.scale(player_sprite, (math.trunc(player_sprite.get_width() / 2), math.trunc(player_sprite.get_height() / 2)))
 		## Создание игрока
-		self.this_player = Player(player_sprite, mass, random.randint(player_sprite_width, (self.w * self.chunk_w) - player_sprite_width) / self.chunk_w, random.randint(player_sprite_height, (self.h * self.chunk_h) - player_sprite_height) / self.chunk_h, nickname, self)
+		self.this_player = Player(sprite, mass, nickname, self, 5.0, 5.0)
 		## Добавление игрока в список объектов
-		self.objects.append(self.this_player)
+		self.addObject(self.this_player)
 
 	def update(self):
-		while True:
+		t = currentThread()
+		while getattr(t, "do_run", True):
 			draw_start_time = timeit.default_timer()
 			w = pygame.display.Info().current_w
 			h = pygame.display.Info().current_h
@@ -38,7 +42,7 @@ class Map:
 
 			self.this_player.camera.update(w, h)
 			self.itertime = timeit.default_timer() - draw_start_time
-			time.sleep(1 / 60)
+			time.sleep(1 * 10 ** -300)
 
 	def draw(self):
 		self.this_player.camera.draw(self.game)

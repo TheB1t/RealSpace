@@ -12,13 +12,14 @@ class Point:
 		return math.sqrt((self.x * self.x) + (self.y * self.y))
 
 	def norm(self):
-		return Point(self.x / self.lenght(), self.y / self.lenght())
+		return Point(self.x / self.length(), self.y / self.length())
 	
 	def trunc(self):
 		return Point(math.trunc(self.x), math.trunc(self.y))
 	### Возвращает вектор повернутый на angle
 	def rotate(self, angle):
-		return Point((self.x * math.cos(angle)) - (self.y * math.sin(angle)), (self.x * math.sin(angle)) + (self.y * math.cos(angle)))
+		a = (math.pi*(angle * -1))/180
+		return Point((self.x * math.cos(a)) - (self.y * math.sin(a)), (self.x * math.sin(a)) + (self.y * math.cos(a)))
 
 	### Вызывается при сложении Point += obj или Point + obj
 	def __add__(self, obj):
